@@ -6,14 +6,13 @@ sudo apt install ufw -y && sudo ufw enable
 
 #USER MANAGEMENT (changes all passwords to Cyberpatriot1!)
 
-
 # Prompt for administrators
-read -p "Administrators (comma-separated): " admin_input
-IFS=',' read -r -a admins <<< "$admin_input"
+read -p "Administrators (space-separated): " admin_input
+IFS=' ' read -r -a admins <<< "$admin_input"
 
 # Prompt for authorized users
-read -p "Authorized Users (comma-separated): " user_input
-IFS=',' read -r -a users <<< "$user_input"
+read -p "Authorized Users (space-separated): " user_input
+IFS=' ' read -r -a users <<< "$user_input"
 
 # Combine admin and user lists into one for reference
 all_users=("${admins[@]}" "${users[@]}")
@@ -62,30 +61,68 @@ done
 
 echo "Password expiration settings updated for all regular users."
 
+#CRONTABS
+echo "ALL" >> /etc/cron.deny
 
-#DISABLE IPV4 FORWARDING
-echo net.ipv4.ip_forward=0 >> /etc/sysctl.conf
+#.RC LOCAL
+echo "exit 0" > /etc/rc.local
+
+#HARDEN KERNEL
+git clone https://github.com/klthemathnerd8/test-script
+touch /etc/sysctl.conf.backup
+cp /etc/sysctl.conf /etc/sysctl.conf.backup
+cp ~/test-script/sysctl.conf /etc/sysctl.conf
 
 #STOP SERVICES
-sudo systemctl stop apache
-sudo systemctl disable apache
-sudo systemctl stop nginx
-sudo systemctl disable nginx
-sudo systemctl stop openvpn
-sudo systemctl disable openvpn
-sudo systemctl stop vsftpd
-sudo systemctl disable vsftpd
+badservices=(
+  apache apache2 nginx openvpn ftp vsftpd
+)
+echo "Enter the required services (space-separated):"
+read -r -a required_services
+
+declare -A required_map
+for services in "${required_services[@]}"; do
+  required_map[$services]=1
+done
+
+for package in "${badservices[@]}"; do
+  if [[ -z ${required_map[$package]} ]]; then
+    echo "Removing $package..."
+    sudo systemctl stop --purge -y "$package"
+  else
+    echo "Skipping $package (required)."
+  fi
+done
+
+
 
 #REMOVE STUFF
-sudo apt remove john -y
-sudo apt remove ophcrack -y
-sudo apt remove deluge -y
-sudo apt remove wireshark -y
-sudo apt remove freeciv -y
-sudo apt remove netcat -y
-sudo apt remove hydra -y
-sudo apt remove inkscape -y
-sudo apt remove  -y
+naughty_list=(
+  john nmap vuze frostwire kismet freeciv minetest minetest-server medusa hydra
+  truecrack ophcrack nikto cryptcat nc netcat tightvncserver x11vnc nfs xinetd samba
+  postgresql sftpd vsftpd apache apache2 ftp mysql php snmp pop3 icmp sendmail
+  dovecot bind9 nginx telnet rlogind rshd rcmd rexecd rbootd rquotad rstatd rusersd
+  rwalld rexd fingerd tftpd telnet snmp netcat nc
+)
+echo "Enter the required software (space-separated):"
+read -r -a required_software
+
+declare -A required_map
+for software in "${required_software[@]}"; do
+  required_map[$software]=1
+done
+
+for package in "${naughty_list[@]}"; do
+  if [[ -z ${required_map[$package]} ]]; then
+    echo "Removing $package..."
+    sudo apt-get remove --purge -y "$package"
+  else
+    echo "Skipping $package (required)."
+  fi
+done
+
+sudo apt-get autoremove -y
+sudo apt-get autoclean
 
 #FILE PERMS
 
@@ -96,4 +133,37 @@ chmod -R 640 /etc/sudoers
 chmod -R 640 /var/www
 
 
+#APACHE
+echo "ServerSignature Off" | sudo tee -a /etc/apache2/apache2.conf
+echo "ServerTokens Prod" | sudo tee -a /etc/apache2/apache2.conf
+
+#SSH
+echo "Protocol 2" | sudo tee -a /etc/ssh/sshd_config
+echo "LogLevel VERBOSE" | sudo tee -a /etc/ssh/sshd_config
+echo "X11Forwarding no" | sudo tee -a /etc/ssh/sshd_config
+echo "MaxAuthTries 4" | sudo tee -a /etc/ssh/sshd_config
+echo "IgnoreRhosts yes" | sudo tee -a /etc/ssh/sshd_config
+echo "HostbasedAuthentication no" | sudo tee -a /etc/ssh/sshd_config
+echo "PermitRootLogin no" | sudo tee -a /etc/ssh/sshd_config
+echo "PermitEmptyPasswords no" | sudo tee -a /etc/ssh/sshd_config
+
+#UNATTENDED UPGRADES
+sudo apt install unattended-upgrades
+sudo tee -a /etc/apt/apt.conf.d/20auto-upgrades <<EOF
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Download-Upgradeable-Packages "1";
+APT::Periodic::AutocleanInterval "7";
+APT::Periodic::Unattended-Upgrade "1";
+EOF
+sudo tee -a /etc/apt/apt.conf.d/50auto-upgrades <<EOF
+Unattended-Upgrade::Allowed-Origins {
+	"\${distro_id} stable";
+	"\${distro_id} \${distro_codename}-security";
+	"\${distro_id} \${distro_codename}-updates";
+};
+
+Unattended-Upgrade::Package-Blacklist {
+	"libproxy1v5";		# since the school filter blocks the word proxy
+};
+EOF
 
