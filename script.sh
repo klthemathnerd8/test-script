@@ -62,14 +62,6 @@ done
 
 echo "Password expiration settings updated for all regular users."
 
-#CRONTABS
-echo # > /etc/crontab
-echo # > /etc/cron.d
-echo # > /etc/cron.hourly
-echo # > /etc/cron.daily
-echo # > /etc/cron.weekly
-echo # > /etc/cron.monthly
-echo # > /var/spool/cron/crontabs
 
 #DISABLE IPV4 FORWARDING
 echo net.ipv4.ip_forward=0 >> /etc/sysctl.conf
@@ -82,6 +74,7 @@ sudo systemctl disable nginx
 sudo systemctl stop openvpn
 sudo systemctl disable openvpn
 sudo systemctl stop vsftpd
+sudo systemctl disable vsftpd
 
 #REMOVE STUFF
 sudo apt remove john -y
@@ -91,7 +84,7 @@ sudo apt remove wireshark -y
 sudo apt remove freeciv -y
 sudo apt remove netcat -y
 sudo apt remove hydra -y
-sudo apt remove  -y
+sudo apt remove inkscape -y
 sudo apt remove  -y
 
 #FILE PERMS
